@@ -12,20 +12,13 @@ phew:phew[til (-1+count phew)];
 t:(key cev),'phew;
 pcisactiv:(key cev),'phew%value cev;
 
+c:`label_id`category
+colStr:"SS";
+.Q.fs[{`lc insert flip c!(colStr;",")0:x}]`:label_categories.csv;
 
-/f:{[a;t]if[t=0;show "("];show"(";show a@t;show ")";$[t<(-1+count a);f[a;t+1];show ")"]}
-
-/func:{[arr;l]t:count arr[0];if[t<>1;l:l,t];newarr:arr[0];$[(sum -1#count newarr)<>1;func[newarr;l];l]}
-/kfunc:{[arr]if[1=(count arr[0]);:count arr];l:(count arr),h:{[k;ll]if[1<>count k[0];ll:ll,count k[0]];newarr:k[0];$[(count newarr)<>1;h[newarr;ll];ll]}[arr[0];count arr[0]]; l}
-/==========================
-
-q)c:`label_id`category
-q)colStr:"SS";
-q).Q.fs[{`lc insert flip c!(colStr;",")0:x}]`:label_categories.csv;
-
-q)c:`app_id`label_id
-q)colStr:"SS";
-q).Q.fs[{`al insert flip c!(colStr;",")0:x}]`:app_labels.csv;
+c:`app_id`label_id
+colStr:"SS";
+.Q.fs[{`al insert flip c!(colStr;",")0:x}]`:app_labels.csv;
 
 alc:ej[`label_id;al;lc];
 
@@ -62,21 +55,6 @@ jappepc:jappepc,'appidscore;
 jappepc:delete app_id from jappepc;
 gjappepc:select by event_id from jappepc;
 
-/ /jappepcmfappid:ej[`app_id;jappepc;mfappid]
-
-/ jappepcmfappid:delete app_id from jappepcmfappid;
-/ g:group jappepcmfappid[`event_id]
-/ vg:value g;
-
-
-/ final:jappepcmfappid[vg[;0]];
-
-/ final_score:([]final_score:final[`active_score]*final[`app_id_score])
-
-/ final:final,'final_score;
-
-/ finalev:delete active_score, app_id_score from final;
-
 c:`event_id`device_id`timestamp`longitude`latitude
 colStr:"SSSSS"
 .Q.fs[{`ev insert flip c!(colStr;",")0:x}]`:events.csv;
@@ -91,14 +69,15 @@ cg:count vg;
 master:til cg;
 flist:();
 data:vg;
-sampler:{[master;c]smpl:(floor (count master)%(1.2))?(count master);$[0=count flist;flist::data[smpl];flist::flist,data[smpl]];m:where not master in smpl;$[c>count flist;sampler[m;c];flist::flist[til c]]}
-/ jevfinalev:ej[`event_id;ev;finalev];
-/ / save `:imputedata:jevfinalev
-/ idt:jevfinalev;
-/ didt:distinct idt[`device_id]
-/ dga:distinct ga[`device_id]
-/ /where not didt  in dga
-evsmpl:sample[master]
+sampler:{[master;c]smpl:(floor (count master)%(1.2))?(count master);
+	$[0=count flist;
+	flist::data[smpl];
+	flist::flist,data[smpl]];
+	m:where not master in smpl;
+	$[c>count flist;sampler[m;c];
+	flist::flist[til c]]}
+
+evsmpl:sampler[master;count data];
 diff:([]event_id:diff);
 evs:diff,'evsmpl;
 evs:delete from evs where evs[`event_id]=`
@@ -130,6 +109,16 @@ tmpdevidtbl:([]device_id:l1diff);
 tmpdevidtbl:tmpdevidtbl,'devidsmpl;
 tmpga:ej[`device_id;tmpga;tmpdevidtbl];
 
+flist:();
+data:jevconsevs[where tmpga[`device_id] in l1diff]; / sample only from device_ids of jevconsevs that don't exist in jevconsevs 
+master:til count data;
+devidsmpl:sampler[master;(count l2diff)]; 
+devidsmpl:delete device_id,latitude,longitude,timestamp from devidsmpl;
+tmpdevidtbl:([]device_id:l2diff);
+tmpdevidtbl:tmpdevidtbl,'devidsmpl;
+/tmpga:ej[`device_id;tmpga;tmpdevidtbl];
+tmpga:tmpga uj tmpdevidtbl; / fills in null for no values
+
 data:jevconsevs[where jevconsevs[`device_id] in tmpcmn[`device_id]]; /common rows
 master:til count data;
 flist:();
@@ -141,20 +130,11 @@ tmpcmn:ej[`device_id;tmpcmn;cmntmpdevidtbl];
 fga:tmpcmn,tmpga; /finally !
 
 
-/ remove duplicates !!
-/discinct pbdm na idiot !
-/ k: count each group pbdm[`device_id];
-/ h:(key k)[where (value k)>1];
-/ kpbdm:delete from pbdm where device_id in h;
 c:`device_id`phone_brand`device_model
 colStr:"SSS"
 .Q.fs[{`pbdm insert flip c!(colStr;",")0:x}]`:phone_brand_device_model.csv;
 pbdm:distinct pbdm;
 pbdm:delete from pbdm where pbdm[`device_id]=`;
-jgapbdm:ej[`device_id;fga;pbdm];
+final:jgapbdm:ej[`device_id;fga;pbdm];
 
-/jgapbdmevfinalev:ej[`device_id;jgapbdm;jevfinalev]
-
-g:distinct jgapbdmevfinalev[`device_id]
-rockstar:select by device_id from jgapbdmevfinalev where device_id in g
 
